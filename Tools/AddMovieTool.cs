@@ -73,6 +73,22 @@ public sealed class AddMovieTool(RadarrClient radarr)
         if (movie is null)
             return new AddMovieResult(req.TmdbId, null, null, false, null, $"No movie found for TMDB ID {req.TmdbId}.");
 
+        // Compute letter-based root folder when not explicitly provided
+        var autoRootFolder = defaultRootFolder;
+        if (req.RootFolderPath is null)
+        {
+            var sortTitle = GetSortTitle(movie.Title ?? string.Empty);
+            if (sortTitle.Length > 0)
+            {
+                var first = sortTitle[0];
+                var letter = char.IsLetter(first)
+                    ? char.ToUpperInvariant(first).ToString()
+                    : char.IsDigit(first) ? "#" : null;
+                if (letter is not null)
+                    autoRootFolder = $"{defaultRootFolder.TrimEnd('/')}/{letter}";
+            }
+        }
+
         // Compose the POST body Radarr expects
         var body = new
         {
@@ -82,7 +98,7 @@ public sealed class AddMovieTool(RadarrClient radarr)
             images = movie.Images ?? [],
             year = movie.Year,
             qualityProfileId = req.QualityProfileId ?? defaultProfileId,
-            rootFolderPath = req.RootFolderPath ?? defaultRootFolder,
+            rootFolderPath = req.RootFolderPath ?? autoRootFolder,
             monitored = req.Monitored,
             addOptions = new { searchForMovie = req.SearchForMovie }
         };
@@ -92,5 +108,32 @@ public sealed class AddMovieTool(RadarrClient radarr)
             return new AddMovieResult(req.TmdbId, movie.Title, movie.Year, false, null, addResult.Error);
 
         return new AddMovieResult(req.TmdbId, addResult.Value!.Title, addResult.Value.Year, true, addResult.Value.Id, null);
+    }
+
+    private static string GetSortTitle(string originalTitle)
+    {
+        var title = originalTitle.Trim();
+
+        // Apostrophe-terminated articles: strip prefix up to and including the apostrophe
+        string[] apostropheArticles = ["l'", "un'"];
+        foreach (var article in apostropheArticles)
+        {
+            if (title.StartsWith(article, StringComparison.OrdinalIgnoreCase))
+                return title[article.Length..].Trim();
+        }
+
+        // Space-separated articles: strip article + leading whitespace
+        string[] spaceArticles = ["the", "an", "a", "il", "lo", "la", "gli", "le", "i", "uno", "una", "un"];
+        foreach (var article in spaceArticles)
+        {
+            if (title.Length > article.Length &&
+                title.StartsWith(article, StringComparison.OrdinalIgnoreCase) &&
+                char.IsWhiteSpace(title[article.Length]))
+            {
+                return title[article.Length..].TrimStart();
+            }
+        }
+
+        return title;
     }
 }
