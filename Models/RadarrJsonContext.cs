@@ -28,6 +28,10 @@ namespace RadarrMcp.Models;
 [JsonSerializable(typeof(List<QueueItem>))]
 [JsonSerializable(typeof(SystemStatusResponse))]
 [JsonSerializable(typeof(ErrorResponse))]
+[JsonSerializable(typeof(MultiSearchRequest))]
+[JsonSerializable(typeof(List<MultiSearchRequest>))]
+[JsonSerializable(typeof(MultiSearchResult))]
+[JsonSerializable(typeof(List<MultiSearchResult>))]
 [JsonSourceGenerationOptions(
     PropertyNameCaseInsensitive = true,
     WriteIndented = false,

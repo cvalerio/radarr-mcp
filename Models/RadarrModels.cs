@@ -179,3 +179,16 @@ public sealed record SystemStatusResponse(
 
 /// <summary>Generic error envelope returned when a tool call fails.</summary>
 public sealed record ErrorResponse(string Error, string Tool);
+
+// ── Multi-search DTOs ─────────────────────────────────────────────────────────
+
+/// <summary>Single entry in a radarr_multi_search_movie request array.</summary>
+public sealed record MultiSearchRequest(
+    [property: JsonPropertyName("query")] string? Query,
+    [property: JsonPropertyName("limit")] int Limit = 5);
+
+/// <summary>Result for one entry in a radarr_multi_search_movie response array.</summary>
+public sealed record MultiSearchResult(
+    [property: JsonPropertyName("query")] string Query,
+    [property: JsonPropertyName("results")] List<MovieSearchResult> Results,
+    [property: JsonPropertyName("error")] string? Error);
