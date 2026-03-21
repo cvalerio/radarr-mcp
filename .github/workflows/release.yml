@@ -45,15 +45,33 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path ./publish/* -DestinationPath RadarrMcp-${{ matrix.rid }}.zip
 
+      - name: Build Windows installer
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
+            /DAppVersion="$version" `
+            /DSourceDir="${{ github.workspace }}\publish" `
+            installer\windows.iss
+
       - name: Zip (Unix)
         if: matrix.os != 'windows-latest'
         run: zip -j RadarrMcp-${{ matrix.rid }}.zip ./publish/*
 
-      - name: Upload artifact
+      - name: Upload zip artifact
         uses: actions/upload-artifact@v4
         with:
           name: RadarrMcp-${{ matrix.rid }}
           path: RadarrMcp-${{ matrix.rid }}.zip
+          if-no-files-found: error
+
+      - name: Upload Windows installer artifact
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: RadarrMcp-win-x64-setup
+          path: installer/installer-out/RadarrMcp-win-x64-setup.exe
           if-no-files-found: error
 
   release:
@@ -74,4 +92,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: artifacts/*.zip
+          files: |
+            artifacts/*.zip
+            artifacts/*.exe
