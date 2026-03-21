@@ -10,7 +10,7 @@ public sealed class RadarrOptions
     public string Url { get; set; } = string.Empty;
 
     /// <summary>Radarr API key from Settings → General → Security.</summary>
-    [Required(AllowEmptyStrings = false, ErrorMessage = "RADARR__API_KEY is required.")]
+    [Required(AllowEmptyStrings = false, ErrorMessage = "RADARR__APIKEY is required.")]
     public string ApiKey { get; set; } = string.Empty;
 
     /// <summary>Per-request timeout in milliseconds. Defaults to 15000.</summary>

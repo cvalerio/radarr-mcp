@@ -39,10 +39,10 @@ Output lands in `bin/Release/net10.0/<rid>/publish/`.
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `RADARR__URL` | yes | — | Base URL of your Radarr instance, e.g. `http://radarr:7878` |
-| `RADARR__API_KEY` | yes | — | API key from Radarr → Settings → General → Security |
-| `RADARR__TIMEOUT_MS` | no | `15000` | Per-request timeout in milliseconds |
+| `RADARR__APIKEY` | yes | — | API key from Radarr → Settings → General → Security |
+| `RADARR__TIMEOUTMS` | no | `15000` | Per-request timeout in milliseconds |
 
-> **Note:** the separator is double underscore `__` (standard .NET environment variable hierarchy separator).
+> **Note:** `__` (double underscore) is the .NET hierarchy separator. Property names are matched case-insensitively with no underscore substitution — `RADARR__APIKEY` maps to `ApiKey`, not `RADARR__API_KEY`.
 
 ---
 
@@ -57,7 +57,7 @@ Add to `claude_desktop_config.json`:
       "command": "/path/to/RadarrMcp",
       "env": {
         "RADARR__URL": "http://radarr:7878",
-        "RADARR__API_KEY": "your-api-key-here"
+        "RADARR__APIKEY": "your-api-key-here"
       }
     }
   }
@@ -73,7 +73,7 @@ On Windows use the `.exe` binary and forward slashes or escaped backslashes.
 ```bash
 claude mcp add radarr /path/to/RadarrMcp \
   -e RADARR__URL=http://radarr:7878 \
-  -e RADARR__API_KEY=your-api-key-here
+  -e RADARR__APIKEY=your-api-key-here
 ```
 
 ---
@@ -107,8 +107,8 @@ services:
       - ./publish/linux-x64:/app:ro
     environment:
       - RADARR__URL=http://radarr:7878
-      - RADARR__API_KEY=your-api-key-here
-      - RADARR__TIMEOUT_MS=15000
+      - RADARR__APIKEY=your-api-key-here
+      - RADARR__TIMEOUTMS=15000
     depends_on:
       - radarr
     stdin_open: true

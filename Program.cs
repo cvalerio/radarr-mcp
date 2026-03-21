@@ -11,7 +11,7 @@ var builder = Host.CreateApplicationBuilder(args);
 // ── Configuration ──────────────────────────────────────────────────────────
 // Host.CreateApplicationBuilder already adds environment variables.
 // Bind from env vars using double-underscore hierarchy separator:
-//   RADARR__URL, RADARR__API_KEY, RADARR__TIMEOUT_MS
+//   RADARR__URL, RADARR__APIKEY, RADARR__TIMEOUTMS
 
 builder.Services
     .AddOptions<RadarrOptions>()
