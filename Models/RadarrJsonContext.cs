@@ -36,6 +36,9 @@ namespace RadarrMcp.Models;
 [JsonSerializable(typeof(List<MultiSearchRequest>))]
 [JsonSerializable(typeof(MultiSearchResult))]
 [JsonSerializable(typeof(List<MultiSearchResult>))]
+[JsonSerializable(typeof(MultiGetDetailsResult))]
+[JsonSerializable(typeof(List<MultiGetDetailsResult>))]
+[JsonSerializable(typeof(List<int>))]
 [JsonSourceGenerationOptions(
     PropertyNameCaseInsensitive = true,
     WriteIndented = false,

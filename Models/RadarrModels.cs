@@ -207,3 +207,11 @@ public sealed record MultiSearchResult(
     [property: JsonPropertyName("query")] string Query,
     [property: JsonPropertyName("results")] List<MovieSearchResult> Results,
     [property: JsonPropertyName("error")] string? Error);
+
+// ── Multi-get-details DTOs ────────────────────────────────────────────────────
+
+/// <summary>Result for one entry in a radarr_multi_get_details response array.</summary>
+public sealed record MultiGetDetailsResult(
+    [property: JsonPropertyName("radarrId")] int RadarrId,
+    [property: JsonPropertyName("result")] RadarrMovie? Result,
+    [property: JsonPropertyName("error")] string? Error);
