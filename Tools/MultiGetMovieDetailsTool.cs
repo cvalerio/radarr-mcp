@@ -19,6 +19,19 @@ public sealed class MultiGetMovieDetailsTool(RadarrClient radarr)
         [Description("JSON array of Radarr movie IDs (integers), e.g. [407, 1513, 464]. Max 100 IDs per call.")] string radarrIdsJson,
         CancellationToken cancellationToken = default)
     {
+        try
+        {
+            return await ExecuteAsync(radarrIdsJson, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            var safeInput = (radarrIdsJson ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"");
+            return $"{{\"error\":\"Exception: {ex.GetType().Name}: {ex.Message.Replace("\\", "\\\\").Replace("\"", "\\\"")}\",\"input\":\"{safeInput}\"}}";
+        }
+    }
+
+    private async Task<string> ExecuteAsync(string radarrIdsJson, CancellationToken cancellationToken)
+    {
         List<int>? ids;
         try
         {
