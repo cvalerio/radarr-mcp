@@ -180,6 +180,21 @@ public sealed record SystemStatusResponse(
 /// <summary>Generic error envelope returned when a tool call fails.</summary>
 public sealed record ErrorResponse(string Error, string Tool);
 
+// ── Multi-update DTOs ────────────────────────────────────────────────────────
+
+/// <summary>Single entry in a radarr_update_movies request array.</summary>
+public sealed record MultiUpdateRequest(
+    [property: JsonPropertyName("radarrId")] int RadarrId,
+    [property: JsonPropertyName("monitored")] bool? Monitored,
+    [property: JsonPropertyName("qualityProfileId")] int? QualityProfileId);
+
+/// <summary>Result for one entry in a radarr_update_movies response array.</summary>
+public sealed record MultiUpdateResult(
+    [property: JsonPropertyName("radarrId")] int RadarrId,
+    [property: JsonPropertyName("success")] bool Success,
+    [property: JsonPropertyName("error")] string? Error,
+    [property: JsonPropertyName("movie")] RadarrMovie? Movie);
+
 // ── Multi-search DTOs ─────────────────────────────────────────────────────────
 
 /// <summary>Single entry in a radarr_multi_search_movie request array.</summary>
