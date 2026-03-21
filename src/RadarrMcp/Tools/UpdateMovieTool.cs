@@ -6,7 +6,7 @@ namespace RadarrMcp.Tools;
 
 /// <summary>MCP tool for updating movie settings in the Radarr library.</summary>
 [McpServerToolType]
-public sealed class UpdateMovieTool(RadarrClient radarr)
+public sealed class UpdateMovieTool(IRadarrClient radarr)
 {
     /// <summary>
     /// Updates the monitored status or quality profile of a movie already in the library.

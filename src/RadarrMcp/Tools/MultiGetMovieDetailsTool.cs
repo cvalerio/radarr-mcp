@@ -8,7 +8,7 @@ namespace RadarrMcp.Tools;
 
 /// <summary>MCP tool for retrieving full details of multiple library movies in parallel.</summary>
 [McpServerToolType]
-public sealed class MultiGetMovieDetailsTool(RadarrClient radarr)
+public sealed class MultiGetMovieDetailsTool(IRadarrClient radarr)
 {
     private static readonly SemaphoreSlim _semaphore = new(10, 10);
 

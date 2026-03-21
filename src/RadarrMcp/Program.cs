@@ -25,7 +25,7 @@ var timeoutMs = int.TryParse(builder.Configuration["Radarr:TimeoutMs"], out var 
 var perAttempt = TimeSpan.FromMilliseconds(timeoutMs);
 
 builder.Services
-    .AddHttpClient<RadarrClient>((sp, client) =>
+    .AddHttpClient<IRadarrClient, RadarrClient>((sp, client) =>
     {
         var opts = sp.GetRequiredService<IOptions<RadarrOptions>>().Value;
         client.BaseAddress = new Uri(opts.Url.TrimEnd('/'));

@@ -8,7 +8,7 @@ namespace RadarrMcp.Tools;
 
 /// <summary>MCP tool for searching movies via Radarr's TMDB integration.</summary>
 [McpServerToolType]
-public sealed class SearchMovieTool(RadarrClient radarr)
+public sealed class SearchMovieTool(IRadarrClient radarr)
 {
     private static readonly SemaphoreSlim _searchSemaphore = new(10, 10);
 

@@ -34,7 +34,7 @@ jobs:
 
       - name: Publish
         run: >
-          dotnet publish RadarrMcp.csproj
+          dotnet publish src/RadarrMcp/RadarrMcp.csproj
           -c Release
           -r ${{ matrix.rid }}
           -p:PublishRelease=true

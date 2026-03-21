@@ -13,7 +13,7 @@ namespace RadarrMcp.Services;
 /// Typed HTTP client for the Radarr v3 API.
 /// All methods return <see cref="Result{T}"/> — exceptions are never propagated.
 /// </summary>
-public sealed class RadarrClient
+public sealed class RadarrClient : IRadarrClient
 {
     private readonly HttpClient _http;
     private readonly RadarrOptions _options;

@@ -6,7 +6,7 @@ namespace RadarrMcp.Tools;
 
 /// <summary>MCP tool for retrieving full details of a single library movie.</summary>
 [McpServerToolType]
-public sealed class GetMovieDetailsTool(RadarrClient radarr)
+public sealed class GetMovieDetailsTool(IRadarrClient radarr)
 {
     /// <summary>
     /// Returns full details of a specific movie in the Radarr library by its Radarr ID.

@@ -8,7 +8,7 @@ namespace RadarrMcp.Tools;
 
 /// <summary>MCP tool for updating multiple movies in the Radarr library in one call.</summary>
 [McpServerToolType]
-public sealed class UpdateMoviesTool(RadarrClient radarr)
+public sealed class UpdateMoviesTool(IRadarrClient radarr)
 {
     private static readonly SemaphoreSlim _updateSemaphore = new(10, 10);
 

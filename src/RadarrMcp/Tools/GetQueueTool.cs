@@ -7,7 +7,7 @@ namespace RadarrMcp.Tools;
 
 /// <summary>MCP tool for inspecting the Radarr download queue.</summary>
 [McpServerToolType]
-public sealed class GetQueueTool(RadarrClient radarr)
+public sealed class GetQueueTool(IRadarrClient radarr)
 {
     /// <summary>
     /// Returns the current Radarr download queue including active downloads and pending items.

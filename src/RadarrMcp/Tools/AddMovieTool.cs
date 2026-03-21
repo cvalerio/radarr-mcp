@@ -21,7 +21,7 @@ public sealed record AddMovieRequest(
 
 /// <summary>MCP tool for adding movies to the Radarr library.</summary>
 [McpServerToolType]
-public sealed class AddMovieTool(RadarrClient radarr)
+public sealed class AddMovieTool(IRadarrClient radarr)
 {
     /// <summary>
     /// Adds one or more movies to Radarr for monitoring and download.

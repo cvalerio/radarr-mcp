@@ -6,7 +6,7 @@ namespace RadarrMcp.Tools;
 
 /// <summary>MCP tool for removing movies from the Radarr library.</summary>
 [McpServerToolType]
-public sealed class DeleteMovieTool(RadarrClient radarr)
+public sealed class DeleteMovieTool(IRadarrClient radarr)
 {
     /// <summary>
     /// Removes a movie from the Radarr library. Optionally deletes files from disk

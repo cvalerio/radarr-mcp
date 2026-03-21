@@ -7,7 +7,7 @@ namespace RadarrMcp.Tools;
 
 /// <summary>MCP tool for retrieving Radarr system status and health checks.</summary>
 [McpServerToolType]
-public sealed class GetSystemStatusTool(RadarrClient radarr)
+public sealed class GetSystemStatusTool(IRadarrClient radarr)
 {
     /// <summary>
     /// Returns Radarr system information (version, OS, Docker flag) and any active health check warnings.

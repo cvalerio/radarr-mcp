@@ -7,7 +7,7 @@ namespace RadarrMcp.Tools;
 
 /// <summary>MCP tool for browsing the Radarr movie library.</summary>
 [McpServerToolType]
-public sealed class GetLibraryTool(RadarrClient radarr)
+public sealed class GetLibraryTool(IRadarrClient radarr)
 {
     /// <summary>
     /// Returns movies in the Radarr library with optional status filtering and title search.

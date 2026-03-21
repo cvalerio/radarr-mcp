@@ -10,11 +10,11 @@ namespace RadarrMcp.Services;
 /// </summary>
 public sealed class RadarrHealthCheckService : IHostedService
 {
-    private readonly RadarrClient _client;
+    private readonly IRadarrClient _client;
     private readonly ILogger<RadarrHealthCheckService> _logger;
 
     /// <summary>Initializes a new instance of <see cref="RadarrHealthCheckService"/>.</summary>
-    public RadarrHealthCheckService(RadarrClient client, ILogger<RadarrHealthCheckService> logger)
+    public RadarrHealthCheckService(IRadarrClient client, ILogger<RadarrHealthCheckService> logger)
     {
         _client = client;
         _logger = logger;

@@ -23,7 +23,10 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Restore
-        run: dotnet restore RadarrMcp.csproj
+        run: dotnet restore RadarrMCP.sln
 
       - name: Build
-        run: dotnet build RadarrMcp.csproj -c Release --no-restore
+        run: dotnet build RadarrMCP.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test RadarrMCP.sln -c Release --no-build
