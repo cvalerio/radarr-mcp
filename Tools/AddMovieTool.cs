@@ -51,17 +51,17 @@ public sealed class AddMovieTool(RadarrClient radarr)
             return ToolHelpers.ErrorJson("radarr_add_movie", $"Could not fetch root folders: {rootFolders.Error}");
 
         var defaultProfileId = profiles.Value?.FirstOrDefault()?.Id ?? 1;
-        var defaultRootFolder = rootFolders.Value?.FirstOrDefault()?.Path ?? "/movies";
+        var availableRootFolders = rootFolders.Value ?? [];
 
         // Execute all adds in parallel
-        var tasks = movies.Select(req => AddSingleMovieAsync(req, defaultProfileId, defaultRootFolder, cancellationToken));
+        var tasks = movies.Select(req => AddSingleMovieAsync(req, defaultProfileId, availableRootFolders, cancellationToken));
         var results = await Task.WhenAll(tasks).ConfigureAwait(false);
 
         return ToolHelpers.ToJson(results.ToList());
     }
 
     private async Task<AddMovieResult> AddSingleMovieAsync(
-        AddMovieRequest req, int defaultProfileId, string defaultRootFolder,
+        AddMovieRequest req, int defaultProfileId, List<RadarrRootFolder> rootFolders,
         CancellationToken ct)
     {
         // Radarr requires the full movie object from lookup before POST
@@ -73,21 +73,7 @@ public sealed class AddMovieTool(RadarrClient radarr)
         if (movie is null)
             return new AddMovieResult(req.TmdbId, null, null, false, null, $"No movie found for TMDB ID {req.TmdbId}.");
 
-        // Compute letter-based root folder when not explicitly provided
-        var autoRootFolder = defaultRootFolder;
-        if (req.RootFolderPath is null)
-        {
-            var sortTitle = GetSortTitle(movie.Title ?? string.Empty);
-            if (sortTitle.Length > 0)
-            {
-                var first = sortTitle[0];
-                var letter = char.IsLetter(first)
-                    ? char.ToUpperInvariant(first).ToString()
-                    : char.IsDigit(first) ? "#" : null;
-                if (letter is not null)
-                    autoRootFolder = $"{defaultRootFolder.TrimEnd('/')}/{letter}";
-            }
-        }
+        var autoRootFolder = req.RootFolderPath ?? PickRootFolder(movie.Title ?? string.Empty, rootFolders);
 
         // Compose the POST body Radarr expects
         var body = new
@@ -98,7 +84,7 @@ public sealed class AddMovieTool(RadarrClient radarr)
             images = movie.Images ?? [],
             year = movie.Year,
             qualityProfileId = req.QualityProfileId ?? defaultProfileId,
-            rootFolderPath = req.RootFolderPath ?? autoRootFolder,
+            rootFolderPath = autoRootFolder,
             monitored = req.Monitored,
             addOptions = new { searchForMovie = req.SearchForMovie }
         };
@@ -108,6 +94,28 @@ public sealed class AddMovieTool(RadarrClient radarr)
             return new AddMovieResult(req.TmdbId, movie.Title, movie.Year, false, null, addResult.Error);
 
         return new AddMovieResult(req.TmdbId, addResult.Value!.Title, addResult.Value.Year, true, addResult.Value.Id, null);
+    }
+
+    private static string PickRootFolder(string movieTitle, List<RadarrRootFolder> rootFolders)
+    {
+        var fallback = rootFolders.FirstOrDefault()?.Path ?? "/movies";
+
+        var sortTitle = GetSortTitle(movieTitle);
+        if (sortTitle.Length == 0) return fallback;
+
+        var first = sortTitle[0];
+        string[] suffixesToTry = char.IsDigit(first)
+            ? ["/#", "/0-9"]
+            : char.IsLetter(first) ? [$"/{char.ToUpperInvariant(first)}"] : [];
+
+        foreach (var suffix in suffixesToTry)
+        {
+            var match = rootFolders.FirstOrDefault(f =>
+                f.Path?.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) == true);
+            if (match is not null) return match.Path;
+        }
+
+        return fallback;
     }
 
     private static string GetSortTitle(string originalTitle)
