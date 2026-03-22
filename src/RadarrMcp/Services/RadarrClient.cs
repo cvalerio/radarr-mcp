@@ -152,6 +152,57 @@ public sealed class RadarrClient : IRadarrClient
         }
     }
 
+    // ── Commands ──────────────────────────────────────────────────────────────
+
+    /// <summary>Sends a command to Radarr via POST /api/v3/command.</summary>
+    public async Task<Result<RadarrCommandResponse>> SendCommandAsync(string commandName, JsonElement? commandArgs = null, CancellationToken ct = default)
+    {
+        const string path = "/api/v3/command";
+        try
+        {
+            var bodyObj = new JsonObject { ["name"] = commandName };
+            if (commandArgs.HasValue && commandArgs.Value.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var prop in commandArgs.Value.EnumerateObject())
+                    bodyObj[prop.Name] = JsonNode.Parse(prop.Value.GetRawText());
+            }
+            using var content = new StringContent(bodyObj.ToJsonString(), Encoding.UTF8, "application/json");
+            var response = await _http.PostAsync(path, content, ct).ConfigureAwait(false);
+            return await ParseResponseAsync<RadarrCommandResponse>(response, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            return HandleException<RadarrCommandResponse>(ex, path);
+        }
+    }
+
+    // ── Wanted / cutoff unmet ─────────────────────────────────────────────────
+
+    /// <summary>Returns all monitored movies where the quality cutoff has not been met, fetching all pages.</summary>
+    public async Task<Result<List<RadarrMovie>>> GetCutoffUnmetAsync(CancellationToken ct = default)
+    {
+        const int pageSize = 500;
+        var allRecords = new List<RadarrMovie>();
+        int page = 1;
+
+        while (true)
+        {
+            var path = $"/api/v3/wanted/cutoff?pageSize={pageSize}&page={page}&monitored=true";
+            var result = await GetAsync<RadarrWantedCutoffResponse>(path, ct).ConfigureAwait(false);
+            if (!result.IsSuccess) return Result<List<RadarrMovie>>.Fail(result.Error!);
+
+            var records = result.Value!.Records ?? [];
+            allRecords.AddRange(records);
+
+            if (allRecords.Count >= result.Value.TotalRecords || records.Count < pageSize)
+                break;
+
+            page++;
+        }
+
+        return Result<List<RadarrMovie>>.Ok(allRecords);
+    }
+
     // ── Private HTTP helpers ──────────────────────────────────────────────────
 
     private async Task<Result<T>> GetAsync<T>(string path, CancellationToken ct)

@@ -38,7 +38,8 @@ public sealed record RadarrQualityWrapper(
 /// <summary>Quality profile info.</summary>
 public sealed record RadarrQualityInfo(
     [property: JsonPropertyName("id")] int Id,
-    [property: JsonPropertyName("name")] string Name);
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("resolution")] int? Resolution = null);
 
 // ── Full movie resource (returned by GET /api/v3/movie and /api/v3/movie/{id}) ─
 
@@ -187,6 +188,37 @@ public sealed record SystemStatusResponse(
 
 /// <summary>Generic error envelope returned when a tool call fails.</summary>
 public sealed record ErrorResponse(string Error, string Tool);
+
+// ── Command ───────────────────────────────────────────────────────────────────
+
+/// <summary>Response from POST /api/v3/command.</summary>
+public sealed record RadarrCommandResponse(
+    [property: JsonPropertyName("id")] int Id,
+    [property: JsonPropertyName("name")] string? Name,
+    [property: JsonPropertyName("commandName")] string? CommandName,
+    [property: JsonPropertyName("status")] string? Status,
+    [property: JsonPropertyName("queued")] DateTime? Queued,
+    [property: JsonPropertyName("started")] DateTime? Started,
+    [property: JsonPropertyName("trigger")] string? Trigger,
+    [property: JsonPropertyName("message")] string? Message);
+
+// ── Wanted / cutoff unmet ─────────────────────────────────────────────────────
+
+/// <summary>Paged response from GET /api/v3/wanted/cutoff.</summary>
+public sealed record RadarrWantedCutoffResponse(
+    [property: JsonPropertyName("page")] int Page,
+    [property: JsonPropertyName("pageSize")] int PageSize,
+    [property: JsonPropertyName("totalRecords")] int TotalRecords,
+    [property: JsonPropertyName("records")] List<RadarrMovie>? Records);
+
+/// <summary>Cutoff-unmet movie summary returned to MCP clients.</summary>
+public sealed record CutoffUnmetMovie(
+    [property: JsonPropertyName("radarrId")] int RadarrId,
+    [property: JsonPropertyName("title")] string Title,
+    [property: JsonPropertyName("year")] int Year,
+    [property: JsonPropertyName("qualityProfileId")] int QualityProfileId,
+    [property: JsonPropertyName("quality")] string? Quality,
+    [property: JsonPropertyName("resolution")] int? Resolution);
 
 // ── Multi-update DTOs ────────────────────────────────────────────────────────
 

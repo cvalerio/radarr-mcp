@@ -1,3 +1,4 @@
+using System.Text.Json;
 using RadarrMcp.Models;
 
 namespace RadarrMcp.Services;
@@ -63,4 +64,14 @@ public interface IRadarrClient
 
     /// <summary>Imports an array of mutated lookup objects into the Radarr library.</summary>
     Task<Result<List<RadarrMovie>>> ImportMoviesAsync(IEnumerable<System.Text.Json.JsonElement> movies, CancellationToken ct = default);
+
+    // ── Commands ──────────────────────────────────────────────────────────────
+
+    /// <summary>Sends a command to Radarr via POST /api/v3/command.</summary>
+    Task<Result<RadarrCommandResponse>> SendCommandAsync(string commandName, JsonElement? commandArgs = null, CancellationToken ct = default);
+
+    // ── Wanted / cutoff unmet ─────────────────────────────────────────────────
+
+    /// <summary>Returns all monitored movies where the quality cutoff has not been met, fetching all pages.</summary>
+    Task<Result<List<RadarrMovie>>> GetCutoffUnmetAsync(CancellationToken ct = default);
 }

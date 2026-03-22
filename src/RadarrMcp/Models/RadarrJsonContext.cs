@@ -50,6 +50,10 @@ namespace RadarrMcp.Models;
 [JsonSerializable(typeof(ImportMovieResult))]
 [JsonSerializable(typeof(List<ImportMovieResult>))]
 [JsonSerializable(typeof(List<int>))]
+[JsonSerializable(typeof(RadarrCommandResponse))]
+[JsonSerializable(typeof(RadarrWantedCutoffResponse))]
+[JsonSerializable(typeof(CutoffUnmetMovie))]
+[JsonSerializable(typeof(List<CutoffUnmetMovie>))]
 [JsonSourceGenerationOptions(
     PropertyNameCaseInsensitive = true,
     WriteIndented = false,
