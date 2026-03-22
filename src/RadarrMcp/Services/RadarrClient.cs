@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RadarrMcp.Models;
@@ -16,6 +17,7 @@ namespace RadarrMcp.Services;
 public sealed class RadarrClient : IRadarrClient
 {
     private readonly HttpClient _http;
+    private readonly IHttpClientFactory _httpClientFactory;
     private readonly RadarrOptions _options;
     private readonly ILogger<RadarrClient> _logger;
 
@@ -26,9 +28,10 @@ public sealed class RadarrClient : IRadarrClient
     };
 
     /// <summary>Initializes a new instance of <see cref="RadarrClient"/>.</summary>
-    public RadarrClient(HttpClient http, IOptions<RadarrOptions> options, ILogger<RadarrClient> logger)
+    public RadarrClient(HttpClient http, IHttpClientFactory httpClientFactory, IOptions<RadarrOptions> options, ILogger<RadarrClient> logger)
     {
         _http = http;
+        _httpClientFactory = httpClientFactory;
         _options = options.Value;
         _logger = logger;
     }
@@ -90,6 +93,64 @@ public sealed class RadarrClient : IRadarrClient
     /// <summary>Returns all configured root folders.</summary>
     public Task<Result<List<RadarrRootFolder>>> GetRootFoldersAsync(CancellationToken ct = default)
         => GetAsync<List<RadarrRootFolder>>("/api/v3/rootfolder", ct);
+
+    /// <summary>Returns a single root folder with its full unmapped-folder scan. Uses a 5-minute timeout.</summary>
+    public async Task<Result<RadarrRootFolder>> GetRootFolderAsync(int rootFolderId, CancellationToken ct = default)
+    {
+        var path = $"/api/v3/rootFolder/{rootFolderId}?timeout=false";
+        try
+        {
+            using var slowClient = _httpClientFactory.CreateClient("RadarrSlow");
+            var response = await slowClient.GetAsync(path, ct).ConfigureAwait(false);
+            return await ParseResponseAsync<RadarrRootFolder>(response, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            return HandleException<RadarrRootFolder>(ex, path);
+        }
+    }
+
+    // ── Library import ────────────────────────────────────────────────────────
+
+    /// <summary>Looks up movies by folder name and returns the raw JSON elements (all fields preserved).</summary>
+    public async Task<Result<List<JsonElement>>> LookupMoviesRawAsync(string term, CancellationToken ct = default)
+    {
+        var path = $"/api/v3/movie/lookup?term={Uri.EscapeDataString(term)}";
+        try
+        {
+            var response = await _http.GetAsync(path, ct).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                return Result<List<JsonElement>>.Fail(FormatHttpError(response.StatusCode, body, path));
+            }
+            var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            using var doc = JsonDocument.Parse(json);
+            var elements = doc.RootElement.EnumerateArray().Select(e => e.Clone()).ToList();
+            return Result<List<JsonElement>>.Ok(elements);
+        }
+        catch (Exception ex)
+        {
+            return HandleException<List<JsonElement>>(ex, path);
+        }
+    }
+
+    /// <summary>Imports an array of mutated lookup objects into the Radarr library.</summary>
+    public async Task<Result<List<RadarrMovie>>> ImportMoviesAsync(IEnumerable<JsonElement> movies, CancellationToken ct = default)
+    {
+        const string path = "/api/v3/movie/import";
+        try
+        {
+            var json = JsonSerializer.Serialize(movies);
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+            var response = await _http.PostAsync(path, content, ct).ConfigureAwait(false);
+            return await ParseResponseAsync<List<RadarrMovie>>(response, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            return HandleException<List<RadarrMovie>>(ex, path);
+        }
+    }
 
     // ── Private HTTP helpers ──────────────────────────────────────────────────
 

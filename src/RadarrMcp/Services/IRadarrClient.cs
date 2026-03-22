@@ -52,4 +52,15 @@ public interface IRadarrClient
 
     /// <summary>Returns all configured root folders.</summary>
     Task<Result<List<RadarrRootFolder>>> GetRootFoldersAsync(CancellationToken ct = default);
+
+    /// <summary>Returns a single root folder with its full unmapped-folder scan. Uses a 5-minute timeout.</summary>
+    Task<Result<RadarrRootFolder>> GetRootFolderAsync(int rootFolderId, CancellationToken ct = default);
+
+    // ── Library import ────────────────────────────────────────────────────────
+
+    /// <summary>Looks up movies by folder name and returns the raw JSON elements (all fields preserved).</summary>
+    Task<Result<List<System.Text.Json.JsonElement>>> LookupMoviesRawAsync(string term, CancellationToken ct = default);
+
+    /// <summary>Imports an array of mutated lookup objects into the Radarr library.</summary>
+    Task<Result<List<RadarrMovie>>> ImportMoviesAsync(IEnumerable<System.Text.Json.JsonElement> movies, CancellationToken ct = default);
 }

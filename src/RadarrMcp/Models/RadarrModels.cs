@@ -101,11 +101,19 @@ public sealed record RadarrQualityProfile(
 
 // ── Root folder ──────────────────────────────────────────────────────────────
 
+/// <summary>An unmapped folder entry inside a root folder scan result.</summary>
+public sealed record RadarrUnmappedFolderItem(
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("path")] string Path,
+    [property: JsonPropertyName("relativePath")] string? RelativePath);
+
 /// <summary>A configured root folder in Radarr.</summary>
 public sealed record RadarrRootFolder(
     [property: JsonPropertyName("id")] int Id,
     [property: JsonPropertyName("path")] string Path,
-    [property: JsonPropertyName("freeSpace")] long FreeSpace);
+    [property: JsonPropertyName("freeSpace")] long FreeSpace,
+    [property: JsonPropertyName("accessible")] bool Accessible = false,
+    [property: JsonPropertyName("unmappedFolders")] List<RadarrUnmappedFolderItem>? UnmappedFolders = null);
 
 // ── Queue ────────────────────────────────────────────────────────────────────
 
@@ -214,4 +222,45 @@ public sealed record MultiSearchResult(
 public sealed record MultiGetDetailsResult(
     [property: JsonPropertyName("radarrId")] int RadarrId,
     [property: JsonPropertyName("result")] RadarrMovie? Result,
+    [property: JsonPropertyName("error")] string? Error);
+
+// ── Root folder / library import DTOs ────────────────────────────────────────
+
+/// <summary>Flattened root folder summary returned to MCP clients.</summary>
+public sealed record RootFolderInfo(
+    [property: JsonPropertyName("id")] int Id,
+    [property: JsonPropertyName("path")] string Path,
+    [property: JsonPropertyName("freeSpace")] long FreeSpace,
+    [property: JsonPropertyName("unmappedFolderCount")] int UnmappedFolderCount,
+    [property: JsonPropertyName("accessible")] bool Accessible);
+
+/// <summary>Single unmapped folder entry returned to MCP clients.</summary>
+public sealed record UnmappedFolderInfo(
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("path")] string Path,
+    [property: JsonPropertyName("relativePath")] string? RelativePath);
+
+/// <summary>Result of radarr_get_unmapped_folders for a single root folder.</summary>
+public sealed record UnmappedFoldersResult(
+    [property: JsonPropertyName("id")] int Id,
+    [property: JsonPropertyName("path")] string Path,
+    [property: JsonPropertyName("unmappedFolders")] List<UnmappedFolderInfo> UnmappedFolders);
+
+/// <summary>Single entry in a radarr_import_movies request array.</summary>
+public sealed record ImportMovieRequest(
+    [property: JsonPropertyName("folderPath")] string FolderPath,
+    [property: JsonPropertyName("folderName")] string FolderName,
+    [property: JsonPropertyName("qualityProfileId")] int? QualityProfileId,
+    [property: JsonPropertyName("monitored")] bool? Monitored);
+
+/// <summary>Result for one entry in a radarr_import_movies response array.</summary>
+public sealed record ImportMovieResult(
+    [property: JsonPropertyName("folderName")] string FolderName,
+    [property: JsonPropertyName("success")] bool Success,
+    [property: JsonPropertyName("radarrId")] int? RadarrId,
+    [property: JsonPropertyName("title")] string? Title,
+    [property: JsonPropertyName("path")] string? Path,
+    [property: JsonPropertyName("conflict")] bool? Conflict,
+    [property: JsonPropertyName("existingRadarrId")] int? ExistingRadarrId,
+    [property: JsonPropertyName("existingTitle")] string? ExistingTitle,
     [property: JsonPropertyName("error")] string? Error);

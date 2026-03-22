@@ -41,6 +41,15 @@ builder.Services
         options.Retry.BackoffType = DelayBackoffType.Exponential;
     });
 
+// Slow client for endpoints that can take minutes (e.g. root folder unmapped scan).
+builder.Services.AddHttpClient("RadarrSlow", (sp, client) =>
+{
+    var opts = sp.GetRequiredService<IOptions<RadarrOptions>>().Value;
+    client.BaseAddress = new Uri(opts.Url.TrimEnd('/'));
+    client.DefaultRequestHeaders.Add("X-Api-Key", opts.ApiKey);
+    client.Timeout = TimeSpan.FromMinutes(5);
+});
+
 // ── Background services ───────────────────────────────────────────────────
 builder.Services.AddHostedService<RadarrHealthCheckService>();
 
