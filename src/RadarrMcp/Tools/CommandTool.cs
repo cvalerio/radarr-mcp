@@ -15,13 +15,27 @@ public sealed class CommandTool(IRadarrClient radarr)
     [Description("Send a command to Radarr via POST /api/v3/command. Use this to trigger immediate actions like MoviesSearch, RescanMovie, RefreshMovie, etc.")]
     public async Task<string> SendCommandAsync(
         [Description("The Radarr command name, e.g. \"MoviesSearch\"")] string commandName,
-        [Description("Additional arguments merged into the command body, e.g. { \"movieIds\": [123, 456] }")] JsonElement? commandArgs = null,
+        [Description("Additional arguments as a JSON object string merged into the command body, e.g. \"{\\\"movieIds\\\": [123, 456]}\"")] string? commandArgs = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(commandName))
             return ToolHelpers.ErrorJson("radarr_command", "commandName is required.");
 
-        var result = await radarr.SendCommandAsync(commandName, commandArgs, cancellationToken);
+        JsonElement? args = null;
+        if (!string.IsNullOrWhiteSpace(commandArgs))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(commandArgs);
+                args = doc.RootElement.Clone();
+            }
+            catch (JsonException)
+            {
+                return ToolHelpers.ErrorJson("radarr_command", "commandArgs must be a valid JSON object string.");
+            }
+        }
+
+        var result = await radarr.SendCommandAsync(commandName, args, cancellationToken);
         if (!result.IsSuccess)
             return ToolHelpers.ErrorJson("radarr_command", result.Error!);
 
