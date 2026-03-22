@@ -19,8 +19,10 @@ jobs:
             os: windows-latest
           - rid: linux-x64
             os: ubuntu-latest
+            deb_arch: amd64
           - rid: linux-arm64
             os: ubuntu-latest
+            deb_arch: arm64
           - rid: osx-arm64
             os: macos-latest
 
@@ -59,6 +61,35 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: zip -j RadarrMcp-${{ matrix.rid }}.zip ./publish/*
 
+      - name: Build Debian package
+        if: startsWith(matrix.rid, 'linux-')
+        run: |
+          version="${{ github.ref_name }}"
+          version="${version#v}"
+          mkdir -p deb-pkg/DEBIAN deb-pkg/usr/local/bin
+          cp ./publish/RadarrMcp deb-pkg/usr/local/bin/
+          chmod +x deb-pkg/usr/local/bin/RadarrMcp
+          sed "s/VERSION/$version/; s/ARCH/${{ matrix.deb_arch }}/" installer/debian/control > deb-pkg/DEBIAN/control
+          cp installer/debian/postinst deb-pkg/DEBIAN/postinst
+          chmod 755 deb-pkg/DEBIAN/postinst
+          dpkg-deb --build deb-pkg RadarrMcp-${{ matrix.rid }}.deb
+
+      - name: Build macOS installer
+        if: matrix.os == 'macos-latest'
+        run: |
+          version="${{ github.ref_name }}"
+          version="${version#v}"
+          mkdir -p payload/usr/local/bin
+          cp ./publish/RadarrMcp payload/usr/local/bin/
+          chmod +x payload/usr/local/bin/RadarrMcp
+          pkgbuild \
+            --root payload \
+            --identifier com.github.cvalerio.radarrmcp \
+            --version "$version" \
+            --scripts installer/macos/scripts \
+            --install-location / \
+            RadarrMcp-${{ matrix.rid }}.pkg
+
       - name: Upload zip artifact
         uses: actions/upload-artifact@v4
         with:
@@ -72,6 +103,22 @@ jobs:
         with:
           name: RadarrMcp-win-x64-setup
           path: installer/installer-out/RadarrMcp-win-x64-setup.exe
+          if-no-files-found: error
+
+      - name: Upload Debian package artifact
+        if: startsWith(matrix.rid, 'linux-')
+        uses: actions/upload-artifact@v4
+        with:
+          name: RadarrMcp-${{ matrix.rid }}-deb
+          path: RadarrMcp-${{ matrix.rid }}.deb
+          if-no-files-found: error
+
+      - name: Upload macOS installer artifact
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: RadarrMcp-${{ matrix.rid }}-pkg
+          path: RadarrMcp-${{ matrix.rid }}.pkg
           if-no-files-found: error
 
   release:
@@ -95,3 +142,5 @@ jobs:
           files: |
             artifacts/*.zip
             artifacts/*.exe
+            artifacts/*.deb
+            artifacts/*.pkg

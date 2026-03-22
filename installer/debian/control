@@ -1,0 +1,11 @@
+Package: radarrmcp
+Version: VERSION
+Architecture: ARCH
+Maintainer: cvalerio
+Description: Radarr MCP Server
+ An MCP (Model Context Protocol) server for Radarr v3 that exposes
+ movie management functionality as MCP tools for Claude and other
+ MCP clients.
+Homepage: https://github.com/cvalerio/radarr-mcp
+Section: utils
+Priority: optional

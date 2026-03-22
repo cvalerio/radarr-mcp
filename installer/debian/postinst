@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+
+echo ""
+echo "RadarrMcp has been installed to /usr/local/bin/RadarrMcp"
+echo ""
+echo "Configure your Radarr connection via environment variables:"
+echo ""
+echo "  RADARR__URL=http://your-radarr:7878"
+echo "  RADARR__APIKEY=your-api-key"
+echo ""
+echo "Set these in your MCP client configuration, for example in"
+echo "Claude Desktop's claude_desktop_config.json under \"env\"."
+echo ""
