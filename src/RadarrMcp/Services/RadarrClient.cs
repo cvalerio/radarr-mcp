@@ -199,6 +199,23 @@ public sealed class RadarrClient : IRadarrClient
     public Task<Result<List<RadarrCommandStatus>>> GetCommandsAsync(CancellationToken ct = default)
         => GetAsync<List<RadarrCommandStatus>>("/api/v3/command", ct);
 
+    /// <summary>Returns a single command via GET /api/v3/command/{id}; the value is null when Radarr answers 404 (unknown or purged ID).</summary>
+    public async Task<Result<RadarrCommandStatus?>> GetCommandAsync(int commandId, CancellationToken ct = default)
+    {
+        var path = $"/api/v3/command/{commandId}";
+        try
+        {
+            var response = await _http.GetAsync(path, ct).ConfigureAwait(false);
+            if (response.StatusCode == HttpStatusCode.NotFound)
+                return Result<RadarrCommandStatus?>.Ok(null);
+            return await ParseResponseAsync<RadarrCommandStatus?>(response, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            return HandleException<RadarrCommandStatus?>(ex, path);
+        }
+    }
+
     // ── Wanted / cutoff unmet ─────────────────────────────────────────────────
 
     /// <summary>Returns all monitored movies where the quality cutoff has not been met, fetching all pages.</summary>

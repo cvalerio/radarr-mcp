@@ -10,11 +10,12 @@ namespace RadarrMcp.Tests;
 public class MoveMoviesToolTests
 {
     private readonly IRadarrClient _radarr = Substitute.For<IRadarrClient>();
+    private readonly ManualTimeProvider _time = new();
     private readonly MoveMoviesTool _tool;
 
     public MoveMoviesToolTests()
     {
-        _tool = new MoveMoviesTool(_radarr);
+        _tool = new MoveMoviesTool(_radarr, _time);
 
         _radarr.GetRootFoldersAsync(Arg.Any<CancellationToken>()).Returns(Result<List<RadarrRootFolder>>.Ok(
         [
@@ -166,6 +167,164 @@ public class MoveMoviesToolTests
 
         Assert.Contains("100", Error(json));
     }
+
+    [Fact]
+    public async Task WithoutWait_DoesNotPollCommand()
+    {
+        SetUpRealMove();
+
+        var json = await _tool.MoveMoviesAsync([1], "/movies/T");
+
+        await _radarr.DidNotReceive().GetCommandAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+        Assert.Empty(_time.Delays);
+        using var doc = JsonDocument.Parse(json);
+        Assert.False(doc.RootElement.TryGetProperty("completion", out _));
+    }
+
+    [Fact]
+    public async Task Wait_CommandCompletes_ReportsCompletedWithDuration()
+    {
+        SetUpRealMove();
+        _radarr.GetCommandAsync(11, Arg.Any<CancellationToken>()).Returns(
+            PollResult("started", "Moving Alien (1/1)"),
+            PollResult("started", "Moving Alien (1/1)"),
+            PollResult("completed", "Completed", duration: "00:00:04.5000000"));
+
+        var json = await _tool.MoveMoviesAsync([1], "/movies/T", waitForCompletion: true);
+
+        using var doc = JsonDocument.Parse(json);
+        var completion = doc.RootElement.GetProperty("completion");
+        Assert.Equal("completed", completion.GetProperty("status").GetString());
+        Assert.Equal(4.5, completion.GetProperty("durationSeconds").GetDouble());
+        Assert.False(completion.TryGetProperty("reverted", out _));
+        Assert.Equal(1, doc.RootElement.GetProperty("moved").GetArrayLength());
+        Assert.Equal([TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2)], _time.Delays);
+    }
+
+    [Fact]
+    public async Task Wait_CommandFails_ReportsFailureDetails()
+    {
+        SetUpRealMove();
+        _radarr.GetCommandAsync(11, Arg.Any<CancellationToken>()).Returns(
+            PollResult("failed", "Failed", exception: "System.IO.IOException: Access denied\n   at Radarr..."));
+
+        var json = await _tool.MoveMoviesAsync([1], "/movies/T", waitForCompletion: true);
+
+        using var doc = JsonDocument.Parse(json);
+        var completion = doc.RootElement.GetProperty("completion");
+        Assert.Equal("failed", completion.GetProperty("status").GetString());
+        Assert.Equal("Failed", completion.GetProperty("message").GetString());
+        Assert.Equal("System.IO.IOException: Access denied", completion.GetProperty("errorMessage").GetString());
+        Assert.Empty(_time.Delays);
+    }
+
+    [Fact]
+    public async Task Wait_CompletedButPathReverted_ReportsCompletedWithErrors()
+    {
+        SetUpRealMove(finalPath: "/movies/A/Alien (1979)");
+        _radarr.GetCommandAsync(11, Arg.Any<CancellationToken>()).Returns(PollResult("completed", "Completed"));
+
+        var json = await _tool.MoveMoviesAsync([1], "/movies/T", waitForCompletion: true);
+
+        using var doc = JsonDocument.Parse(json);
+        var completion = doc.RootElement.GetProperty("completion");
+        Assert.Equal("completedWithErrors", completion.GetProperty("status").GetString());
+        var reverted = completion.GetProperty("reverted");
+        Assert.Equal(1, reverted.GetArrayLength());
+        Assert.Equal("/movies/A/Alien (1979)", reverted[0].GetProperty("currentPath").GetString());
+    }
+
+    [Fact]
+    public async Task Wait_Timeout_IsNotAnError_AndUsesBackoff()
+    {
+        SetUpRealMove();
+        _radarr.GetCommandAsync(11, Arg.Any<CancellationToken>())
+            .Returns(PollResult("started", "Moving Alien from '/movies/A/Alien (1979)' to '/movies/T/Alien (1979)' (1/1)"));
+
+        var json = await _tool.MoveMoviesAsync([1], "/movies/T", waitForCompletion: true, waitTimeoutSeconds: 300);
+
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        Assert.False(root.TryGetProperty("Error", out _));
+        Assert.Equal(1, root.GetProperty("moved").GetArrayLength());
+        var completion = root.GetProperty("completion");
+        Assert.Equal("timeout", completion.GetProperty("status").GetString());
+        Assert.Equal("started", completion.GetProperty("lastStatus").GetString());
+        Assert.StartsWith("Moving Alien", completion.GetProperty("lastMessage").GetString());
+        Assert.Equal(11, completion.GetProperty("commandId").GetInt32());
+        Assert.Contains("radarr_get_command", completion.GetProperty("note").GetString());
+
+        // Fake clock: 300s "elapsed" without sleeping; 2s ×15 (0-30s), 5s ×18 (30-120s), 10s ×18 (120-300s)
+        Assert.Equal(TimeSpan.FromSeconds(300), _time.Elapsed);
+        Assert.Equal(15, _time.Delays.Count(d => d == TimeSpan.FromSeconds(2)));
+        Assert.Equal(18, _time.Delays.Count(d => d == TimeSpan.FromSeconds(5)));
+        Assert.Equal(18, _time.Delays.Count(d => d == TimeSpan.FromSeconds(10)));
+        Assert.Equal(51, _time.Delays.Count);
+    }
+
+    [Fact]
+    public async Task Wait_TransientPollErrors_KeepPolling()
+    {
+        SetUpRealMove();
+        _radarr.GetCommandAsync(11, Arg.Any<CancellationToken>()).Returns(
+            Result<RadarrCommandStatus?>.Fail("Request timed out"),
+            PollResult("completed", "Completed"));
+
+        var json = await _tool.MoveMoviesAsync([1], "/movies/T", waitForCompletion: true);
+
+        using var doc = JsonDocument.Parse(json);
+        Assert.Equal("completed", doc.RootElement.GetProperty("completion").GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task Wait_CommandVanished_ReportsUnknown()
+    {
+        SetUpRealMove();
+        _radarr.GetCommandAsync(11, Arg.Any<CancellationToken>()).Returns(Result<RadarrCommandStatus?>.Ok(null));
+
+        var json = await _tool.MoveMoviesAsync([1], "/movies/T", waitForCompletion: true);
+
+        using var doc = JsonDocument.Parse(json);
+        Assert.Equal("unknown", doc.RootElement.GetProperty("completion").GetProperty("status").GetString());
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1801)]
+    public async Task Wait_InvalidTimeout_IsRejectedBeforeMoving(int seconds)
+    {
+        var json = await _tool.MoveMoviesAsync([1], "/movies/T", waitForCompletion: true, waitTimeoutSeconds: seconds);
+
+        Assert.Contains("waitTimeoutSeconds", Error(json));
+        await _radarr.DidNotReceive().MoveMoviesAsync(Arg.Any<RadarrMovieEditorMoveRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Wait_IgnoredOnDryRun()
+    {
+        var json = await _tool.MoveMoviesAsync([1], "/movies/T", dryRun: true, waitForCompletion: true);
+
+        await _radarr.DidNotReceive().GetCommandAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+        using var doc = JsonDocument.Parse(json);
+        Assert.False(doc.RootElement.TryGetProperty("completion", out _));
+    }
+
+    /// <summary>Movie 1 moves from /movies/A to /movies/T; Radarr queues BulkMoveMovie #11. The second library read returns <paramref name="finalPath"/>.</summary>
+    private void SetUpRealMove(string finalPath = "/movies/T/Alien (1979)")
+    {
+        _radarr.GetLibraryAsync(Arg.Any<CancellationToken>()).Returns(
+            Result<List<RadarrMovie>>.Ok([Movie(1, "Alien", "/movies/A/Alien (1979)")]),
+            Result<List<RadarrMovie>>.Ok([Movie(1, "Alien", finalPath)]));
+        _radarr.GetCommandsAsync(Arg.Any<CancellationToken>()).Returns(
+            Result<List<RadarrCommandStatus>>.Ok([]),
+            Result<List<RadarrCommandStatus>>.Ok([Command(11, "BulkMoveMovie", "queued", """{"movies":[{"movieId":1}]}""")]));
+        _radarr.MoveMoviesAsync(Arg.Any<RadarrMovieEditorMoveRequest>(), Arg.Any<CancellationToken>())
+            .Returns(Result<List<RadarrMovie>>.Ok([Movie(1, "Alien", "/movies/T/Alien (1979)")]));
+    }
+
+    private static Result<RadarrCommandStatus?> PollResult(string status, string message, string? duration = null, string? exception = null) =>
+        Result<RadarrCommandStatus?>.Ok(new RadarrCommandStatus(11, "BulkMoveMovie", status, null, null,
+            Duration: duration, Message: message, Exception: exception));
 
     private static string Error(string json)
     {

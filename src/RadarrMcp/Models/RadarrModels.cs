@@ -202,13 +202,34 @@ public sealed record RadarrCommandResponse(
     [property: JsonPropertyName("trigger")] string? Trigger,
     [property: JsonPropertyName("message")] string? Message);
 
-/// <summary>Entry returned by GET /api/v3/command, including the raw command body.</summary>
+/// <summary>Command resource returned by GET /api/v3/command and GET /api/v3/command/{id}, including the raw command body.</summary>
 public sealed record RadarrCommandStatus(
     [property: JsonPropertyName("id")] int Id,
     [property: JsonPropertyName("name")] string? Name,
     [property: JsonPropertyName("status")] string? Status,
     [property: JsonPropertyName("queued")] DateTime? Queued,
-    [property: JsonPropertyName("body")] System.Text.Json.JsonElement? Body);
+    [property: JsonPropertyName("body")] System.Text.Json.JsonElement? Body,
+    [property: JsonPropertyName("started")] DateTime? Started = null,
+    [property: JsonPropertyName("ended")] DateTime? Ended = null,
+    [property: JsonPropertyName("duration")] string? Duration = null,
+    [property: JsonPropertyName("message")] string? Message = null,
+    [property: JsonPropertyName("result")] string? Result = null,
+    [property: JsonPropertyName("exception")] string? Exception = null);
+
+/// <summary>Compact command status returned by radarr_get_command.</summary>
+public sealed record CommandStatusResult(
+    [property: JsonPropertyName("id")] int Id,
+    [property: JsonPropertyName("name")] string? Name,
+    [property: JsonPropertyName("status")] string? Status,
+    [property: JsonPropertyName("result")] string? Result,
+    [property: JsonPropertyName("queued")] DateTime? Queued,
+    [property: JsonPropertyName("started")] DateTime? Started,
+    [property: JsonPropertyName("ended")] DateTime? Ended,
+    [property: JsonPropertyName("duration")] string? Duration,
+    [property: JsonPropertyName("durationSeconds")] double? DurationSeconds,
+    [property: JsonPropertyName("message")] string? Message,
+    [property: JsonPropertyName("errorMessage")] string? ErrorMessage,
+    [property: JsonPropertyName("exception")] string? Exception);
 
 // ── Movie editor (bulk move) ──────────────────────────────────────────────────
 
@@ -247,7 +268,29 @@ public sealed record MoveMoviesResult(
     [property: JsonPropertyName("moved")] List<MoveMovieEntry>? Moved,
     [property: JsonPropertyName("skipped")] List<MoveMovieSkipped> Skipped,
     [property: JsonPropertyName("queuedCommands")] List<MoveQueuedCommand>? QueuedCommands,
-    [property: JsonPropertyName("note")] string? Note);
+    [property: JsonPropertyName("note")] string? Note,
+    [property: JsonPropertyName("completion")] MoveCompletion? Completion = null);
+
+/// <summary>A movie whose path Radarr reverted to the old location because the file transfer failed.</summary>
+public sealed record MoveMovieReverted(
+    [property: JsonPropertyName("id")] int Id,
+    [property: JsonPropertyName("title")] string Title,
+    [property: JsonPropertyName("currentPath")] string? CurrentPath);
+
+/// <summary>
+/// Outcome of waiting for the move command(s) of radarr_move_movies (waitForCompletion=true).
+/// Status: completed, completedWithErrors, failed, aborted, timeout, cancelled or unknown.
+/// </summary>
+public sealed record MoveCompletion(
+    [property: JsonPropertyName("status")] string Status,
+    [property: JsonPropertyName("commandId")] int? CommandId = null,
+    [property: JsonPropertyName("durationSeconds")] double? DurationSeconds = null,
+    [property: JsonPropertyName("message")] string? Message = null,
+    [property: JsonPropertyName("errorMessage")] string? ErrorMessage = null,
+    [property: JsonPropertyName("lastStatus")] string? LastStatus = null,
+    [property: JsonPropertyName("lastMessage")] string? LastMessage = null,
+    [property: JsonPropertyName("reverted")] List<MoveMovieReverted>? Reverted = null,
+    [property: JsonPropertyName("note")] string? Note = null);
 
 // ── Wanted / cutoff unmet ─────────────────────────────────────────────────────
 

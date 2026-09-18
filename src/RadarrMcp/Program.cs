@@ -66,6 +66,9 @@ builder.Services.AddHttpClient("RadarrMove", (sp, client) =>
     client.Timeout = TimeSpan.FromMilliseconds(opts.MoveTimeoutMs);
 });
 
+// Injected into tools that wait (radarr_move_movies waitForCompletion) so tests can fake the clock.
+builder.Services.AddSingleton(TimeProvider.System);
+
 // ── Background services ───────────────────────────────────────────────────
 builder.Services.AddHostedService<RadarrHealthCheckService>();
 

@@ -57,5 +57,6 @@ Running the server locally requires `RADARR__URL` and `RADARR__APIKEY` env vars 
 
 - `TreatWarningsAsErrors` is enabled — a build with warnings will fail.
 - `tests/RadarrMcp.Tests` uses xUnit + NSubstitute, substituting `IRadarrClient` and asserting on the tool's JSON output (see `MoveMoviesToolTests.cs`). There is no global `using Xunit;` — add it per file.
+- `radarr_move_movies` with `waitForCompletion` polls via `Task.Delay(..., TimeProvider)`; `TimeProvider.System` is registered in `Program.cs` and tests inject `ManualTimeProvider` (fake clock, no real sleeps).
 - `radarr_move_movies` uses a third named client, `"RadarrMove"` (no Polly retries — re-sending a move isn't safe; timeout `RADARR__MOVETIMEOUTMS`, default 120s).
 - Target framework is `net10.0`; the main project publishes as `PublishSingleFile` + `SelfContained` with `DebugType=none` (no `.pdb` in release output).

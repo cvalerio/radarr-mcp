@@ -243,7 +243,24 @@ Update monitored status or quality profile for several movies in parallel. Takes
 ### `radarr_move_movies`
 Move one or more movies to a different root folder via Radarr's bulk movie editor (`PUT /api/v3/movie/editor`). With `moveFiles: true` Radarr physically moves the folders on disk in a background `BulkMoveMovie` job and may rename the movie folder according to its folder naming format. **Destructive — run with `dryRun: true` first.**
 
-Before sending anything, the tool checks that the root folder exists (trailing slash ignored) and that every ID is in the library; if either check fails, nothing is changed. Movies already in the target root folder are reported as `skipped`. The response lists `moved` (or `planned` in dry-run mode) with `id`, `title`, `oldPath`, `newRootFolder`, `newPath`, plus `skipped` and the `queuedCommands` Radarr started for the move (not awaited).
+Before sending anything, the tool checks that the root folder exists (trailing slash ignored) and that every ID is in the library; if either check fails, nothing is changed. Movies already in the target root folder are reported as `skipped`. The response lists `moved` (or `planned` in dry-run mode) with `id`, `title`, `oldPath`, `newRootFolder`, `newPath`, plus `skipped` and the `queuedCommands` Radarr started for the move.
+
+Radarr updates the paths straight away, but the file transfer runs in the background. When the source and destination root folders are on **different physical volumes**, the transfer is a byte-by-byte copy followed by a delete and can take minutes per movie. To find out when it has finished:
+
+- pass `waitForCompletion: true`: the call polls `GET /api/v3/command/{id}` (every 2 s for the first 30 s, then every 5 s up to 2 min, then every 10 s) until the move command ends or `waitTimeoutSeconds` runs out, and adds a `completion` object to the response; or
+- check the `queuedCommands[].id` later with [`radarr_get_command`](#radarr_get_command).
+
+`completion.status` is one of:
+
+| Status | Meaning |
+|---|---|
+| `completed` | Transfer finished and every movie is in the target root folder (`durationSeconds`) |
+| `completedWithErrors` | Radarr finished the command but could not transfer some movies: it reverted their paths to the old location (`reverted[]` with `id`, `title`, `currentPath`). See Radarr's logs for the reason |
+| `failed` / `aborted` | The command failed: `message`, `errorMessage` (first line of Radarr's exception) |
+| `timeout` | Still running when `waitTimeoutSeconds` ran out: `commandId`, `lastStatus`, `lastMessage`. **Not an error:** the paths are already updated and the transfer continues in the background. Check again with `radarr_get_command` |
+| `unknown` | No move command was found, or Radarr no longer knows it. Check the movie paths |
+
+Keep `waitForCompletion` off for large batches: the MCP call stays blocked for the whole wait. While it waits, the server sends MCP progress notifications with Radarr's progress message, if the client asked for them.
 
 **Example:** *"Move movies 12, 15 and 40 to /movies/T — show me the plan first"*
 
@@ -257,6 +274,43 @@ Before sending anything, the tool checks that the root folder exists (trailing s
 | `rootFolderPath` | string | required | Destination root folder, as listed by `radarr_get_root_folders` |
 | `moveFiles` | bool | `true` | `false` = only update the path in Radarr's DB, leave files in place |
 | `dryRun` | bool | `false` | Return the plan without changing anything |
+| `waitForCompletion` | bool | `false` | Wait for the file transfer to finish and report it in `completion`. Ignored with `dryRun: true` or `moveFiles: false` |
+| `waitTimeoutSeconds` | int | `300` | Maximum wait, 1–1800 seconds |
+
+#### End-to-end example: moving to another disk
+
+1. **Plan:** `radarr_move_movies`
+   ```json
+   { "movieIds": [12, 15], "rootFolderPath": "/mnt/disk2/movies", "dryRun": true }
+   ```
+   → `planned: [{ "id": 12, "oldPath": "/mnt/disk1/movies/Heat (1995)", "newPath": "/mnt/disk2/movies/Heat (1995)" }, ...]`
+
+2. **Move and wait:** `radarr_move_movies`
+   ```json
+   { "movieIds": [12, 15], "rootFolderPath": "/mnt/disk2/movies", "waitForCompletion": true, "waitTimeoutSeconds": 600 }
+   ```
+   → `queuedCommands: [{ "id": 4711, "name": "BulkMoveMovie" }]`, `completion: { "status": "timeout", "commandId": 4711, "lastStatus": "started", "lastMessage": "Moving Heat (1995) from '…' to '…' (1/2)", "note": "…" }`
+
+3. **Check again later:** `radarr_get_command`
+   ```json
+   { "commandId": 4711 }
+   ```
+   → `{ "id": 4711, "name": "BulkMoveMovie", "status": "completed", "durationSeconds": 842.3, ... }`
+
+---
+
+### `radarr_get_command`
+Check the status of a Radarr command started earlier (`GET /api/v3/command/{id}`), e.g. the `BulkMoveMovie` in `queuedCommands` from `radarr_move_movies` or the `id` returned by `radarr_command`. Use it to confirm that a move between different volumes has really finished.
+
+It returns a compact object: `id`, `name`, `status` (`queued` / `started` / `completed` / `failed` / `aborted`), `result`, `queued`, `started`, `ended`, `duration` / `durationSeconds`, `message` (Radarr's progress text, e.g. `Moving X from '…' to '…' (2/2)`) and, on failure, `errorMessage` (first line of the exception) and `exception` (capped at 2000 characters). Radarr keeps commands only for a limited time: an unknown or purged ID returns a clear error.
+
+Radarr's move job reports `completed` even when it could not transfer a single movie; in that case it reverts that movie's path. `radarr_move_movies` with `waitForCompletion: true` checks for this. With `radarr_get_command` alone, confirm the paths with `radarr_get_movie_details`.
+
+**Example:** *"Has the move I started earlier finished?"*
+
+| Parameter | Type | Description |
+|---|---|---|
+| `commandId` | int | Command ID, from `queuedCommands[].id` (`radarr_move_movies`) or `id` (`radarr_command`) |
 
 ---
 
@@ -316,7 +370,7 @@ Import unmapped folders into the library. For each folder, the tool looks up the
 ---
 
 ### `radarr_command`
-Send a command to Radarr (`POST /api/v3/command`) to trigger an action right away, e.g. `MoviesSearch`, `RefreshMovie`, `RescanMovie`, `RssSync`. Returns the queued command's `id`, `status` and timestamps without waiting for it to finish.
+Send a command to Radarr (`POST /api/v3/command`) to trigger an action right away, e.g. `MoviesSearch`, `RefreshMovie`, `RescanMovie`, `RssSync`. Returns the queued command's `id`, `status` and timestamps without waiting for it to finish. Use `radarr_get_command` to follow it.
 
 **Example:** *"Search for new releases of movies 123 and 456"*
 

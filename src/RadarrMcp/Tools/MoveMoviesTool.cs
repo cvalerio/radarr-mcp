@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using RadarrMcp.Models;
 using RadarrMcp.Services;
@@ -8,13 +9,18 @@ namespace RadarrMcp.Tools;
 
 /// <summary>MCP tool for moving movies to a different root folder via Radarr's bulk movie editor.</summary>
 [McpServerToolType]
-public sealed class MoveMoviesTool(IRadarrClient radarr)
+public sealed class MoveMoviesTool(IRadarrClient radarr, TimeProvider timeProvider)
 {
     private const string ToolName = "radarr_move_movies";
     private const int MaxMovies = 100;
+    private const int MaxWaitTimeoutSeconds = 1800;
 
     private static readonly HashSet<string> MoveCommandNames = new(StringComparer.OrdinalIgnoreCase)
         { "BulkMoveMovie", "MoveMovie", "RefreshMovie" };
+
+    /// <summary>Commands that actually transfer files; waitForCompletion waits for these only.</summary>
+    private static readonly HashSet<string> TransferCommandNames = new(StringComparer.OrdinalIgnoreCase)
+        { "BulkMoveMovie", "MoveMovie" };
 
     /// <summary>
     /// Moves one or more movies to another root folder through PUT /api/v3/movie/editor.
@@ -27,12 +33,17 @@ public sealed class MoveMoviesTool(IRadarrClient radarr)
         DESTRUCTIVE / IRREVERSIBLE: files are relocated on disk and Radarr may rename the movie folder according to its folder naming format. Always call first with dryRun=true to review the plan, then repeat with dryRun=false.
 
         Get movie IDs (radarrId) from radarr_get_library and valid root folder paths from radarr_get_root_folders. The call is rejected without changing anything if the root folder does not exist or any ID is not in the library. Movies already in the target root folder are skipped.
+
+        The paths in Radarr change immediately, but the file transfer runs in the background. Between root folders on DIFFERENT physical volumes it is a byte-by-byte copy followed by a delete and can take minutes per movie, so the call returns long before the files are in place. To know when it is done, either pass waitForCompletion=true (the call then waits, up to waitTimeoutSeconds, and returns a "completion" object) or check the returned queuedCommands later with radarr_get_command. Keep waitForCompletion=false for large batches. A wait timeout is not an error: the move keeps going in the background.
         """)]
     public async Task<string> MoveMoviesAsync(
         [Description("Radarr IDs of the movies to move (1-100), as returned by radarr_get_library.")] int[] movieIds,
         [Description("Destination root folder path, exactly as listed by radarr_get_root_folders, e.g. \"/movies/T\". A trailing slash is ignored.")] string rootFolderPath,
         [Description("true (default) = move files on disk; false = only update the path in Radarr's database without touching files.")] bool moveFiles = true,
         [Description("true = do not change anything, only return the plan (id, title, current path, destination). Default false.")] bool dryRun = false,
+        [Description("true = after starting the move, wait until Radarr's move command finishes (or waitTimeoutSeconds elapses) and report the outcome in \"completion\". Ignored with dryRun=true or moveFiles=false. Default false.")] bool waitForCompletion = false,
+        [Description("Maximum seconds to wait when waitForCompletion=true (1-1800, default 300).")] int waitTimeoutSeconds = 300,
+        IProgress<ProgressNotificationValue>? progress = null,
         CancellationToken cancellationToken = default)
     {
         if (movieIds is null || movieIds.Length == 0)
@@ -48,6 +59,9 @@ public sealed class MoveMoviesTool(IRadarrClient radarr)
 
         if (string.IsNullOrWhiteSpace(rootFolderPath))
             return ToolHelpers.ErrorJson(ToolName, "rootFolderPath is required.");
+
+        if (waitForCompletion && (waitTimeoutSeconds < 1 || waitTimeoutSeconds > MaxWaitTimeoutSeconds))
+            return ToolHelpers.ErrorJson(ToolName, $"waitTimeoutSeconds must be between 1 and {MaxWaitTimeoutSeconds} (got {waitTimeoutSeconds}).");
 
         // Fetch root folders and library in parallel
         var rootFoldersTask = radarr.GetRootFoldersAsync(cancellationToken);
@@ -148,8 +162,113 @@ public sealed class MoveMoviesTool(IRadarrClient radarr)
             .Select(c => new MoveQueuedCommand(c.Id, c.Name, c.Status))
             .ToList();
 
+        if (!waitForCompletion)
+            return ToolHelpers.ToJson(new MoveMoviesResult(false, target, true, null, moved, skipped, queued,
+                "Paths updated in Radarr; files are being moved in the background (not awaited). Check progress with radarr_get_command."));
+
+        var completion = await WaitForMoveAsync(queued, moved, targetNormalized,
+            TimeSpan.FromSeconds(waitTimeoutSeconds), progress, cancellationToken).ConfigureAwait(false);
         return ToolHelpers.ToJson(new MoveMoviesResult(false, target, true, null, moved, skipped, queued,
-            "Paths updated in Radarr; files are being moved in the background (not awaited)."));
+            "Paths updated in Radarr; see \"completion\" for the file transfer outcome.", completion));
+    }
+
+    /// <summary>Polling interval: 2s for the first 30s, 5s up to 2 minutes, then 10s.</summary>
+    internal static TimeSpan PollInterval(TimeSpan elapsed) =>
+        elapsed < TimeSpan.FromSeconds(30) ? TimeSpan.FromSeconds(2)
+        : elapsed < TimeSpan.FromMinutes(2) ? TimeSpan.FromSeconds(5)
+        : TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Polls GET /api/v3/command/{id} for the transfer commands of this move until they end or the timeout expires.
+    /// Never throws: timeout and cancellation are reported as a completion status.
+    /// </summary>
+    private async Task<MoveCompletion> WaitForMoveAsync(
+        List<MoveQueuedCommand> queued, List<MoveMovieEntry> moved, string targetNormalized,
+        TimeSpan timeout, IProgress<ProgressNotificationValue>? progress, CancellationToken ct)
+    {
+        var pending = queued.Where(c => c.Name is not null && TransferCommandNames.Contains(c.Name))
+            .Select(c => c.Id).Distinct().ToList();
+        if (pending.Count == 0)
+            return new MoveCompletion("unknown",
+                Note: "No move command was found for this call, so there was nothing to wait for. Check the movie paths with radarr_get_movie_details.");
+
+        var last = new Dictionary<int, RadarrCommandStatus>();
+        string? lastError = null;
+        var start = timeProvider.GetTimestamp();
+
+        try
+        {
+            while (true)
+            {
+                foreach (var id in pending.ToList())
+                {
+                    var poll = await radarr.GetCommandAsync(id, ct).ConfigureAwait(false);
+                    if (!poll.IsSuccess)
+                    {
+                        lastError = poll.Error; // transient: keep polling until the timeout
+                        continue;
+                    }
+                    if (poll.Value is null)
+                        return new MoveCompletion("unknown", CommandId: id,
+                            Note: $"Command {id} is no longer known to Radarr (it keeps commands only for a limited time). Check the movie paths with radarr_get_movie_details.");
+
+                    last[id] = poll.Value;
+                    if (ToolHelpers.IsTerminalCommandStatus(poll.Value.Status))
+                        pending.Remove(id);
+                }
+
+                if (pending.Count == 0)
+                    break;
+
+                var elapsed = timeProvider.GetElapsedTime(start);
+                if (elapsed >= timeout)
+                {
+                    var runningId = pending[0];
+                    last.TryGetValue(runningId, out var running);
+                    return new MoveCompletion("timeout", CommandId: runningId,
+                        LastStatus: running?.Status, LastMessage: running?.Message ?? lastError,
+                        Note: "The move continues in the background; check again later with radarr_get_command.");
+                }
+
+                if (last.TryGetValue(pending[0], out var current) && current.Message is not null)
+                    progress?.Report(new ProgressNotificationValue { Progress = (float)elapsed.TotalSeconds, Message = current.Message });
+
+                var delay = PollInterval(elapsed);
+                if (delay > timeout - elapsed) delay = timeout - elapsed;
+                await Task.Delay(delay, timeProvider, ct).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return new MoveCompletion("cancelled", CommandId: pending.FirstOrDefault(),
+                Note: "Waiting was cancelled; the move continues in the background. Check again with radarr_get_command.");
+        }
+
+        var failed = last.Values.FirstOrDefault(c => !string.Equals(c.Status, "completed", StringComparison.OrdinalIgnoreCase));
+        if (failed is not null)
+            return new MoveCompletion(failed.Status?.ToLowerInvariant() ?? "failed", CommandId: failed.Id,
+                DurationSeconds: ToolHelpers.CommandDurationSeconds(failed),
+                Message: failed.Message, ErrorMessage: ToolHelpers.CommandErrorMessage(failed));
+
+        var duration = last.Values.Select(ToolHelpers.CommandDurationSeconds).Max();
+
+        // Radarr catches per-movie transfer errors, reverts that movie's path and still reports "completed":
+        // re-read the library to detect movies that did not end up in the target root folder.
+        var library = await radarr.GetLibraryAsync(ct).ConfigureAwait(false);
+        if (!library.IsSuccess)
+            return new MoveCompletion("completed", DurationSeconds: duration,
+                Note: $"Move command completed, but the final paths could not be verified: {library.Error}");
+
+        var pathsById = (library.Value ?? []).GroupBy(m => m.Id).ToDictionary(g => g.Key, g => g.First().Path);
+        var reverted = moved
+            .Where(m => pathsById.TryGetValue(m.Id, out var path) && !PathsEqual(GetParent(path), targetNormalized))
+            .Select(m => new MoveMovieReverted(m.Id, m.Title, pathsById[m.Id]))
+            .ToList();
+
+        return reverted.Count == 0
+            ? new MoveCompletion("completed", DurationSeconds: duration)
+            : new MoveCompletion("completedWithErrors", DurationSeconds: duration, Reverted: reverted,
+                Note: "Radarr could not transfer these movies and reverted their paths to the old location (see Radarr's logs for the reason, e.g. disk full or permissions). Their files were not moved.");
     }
 
     private static string NormalizePath(string path)

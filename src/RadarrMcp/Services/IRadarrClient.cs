@@ -76,6 +76,9 @@ public interface IRadarrClient
     /// <summary>Returns queued, running and recently finished commands via GET /api/v3/command.</summary>
     Task<Result<List<RadarrCommandStatus>>> GetCommandsAsync(CancellationToken ct = default);
 
+    /// <summary>Returns a single command via GET /api/v3/command/{id}; the value is null when Radarr answers 404 (unknown or purged ID).</summary>
+    Task<Result<RadarrCommandStatus?>> GetCommandAsync(int commandId, CancellationToken ct = default);
+
     // ── Wanted / cutoff unmet ─────────────────────────────────────────────────
 
     /// <summary>Returns all monitored movies where the quality cutoff has not been met, fetching all pages.</summary>
