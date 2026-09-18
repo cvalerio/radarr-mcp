@@ -41,6 +41,7 @@ Output lands in `bin/Release/net10.0/<rid>/publish/`.
 | `RADARR__URL` | yes | — | Base URL of your Radarr instance, e.g. `http://radarr:7878` |
 | `RADARR__APIKEY` | yes | — | API key from Radarr → Settings → General → Security |
 | `RADARR__TIMEOUTMS` | no | `15000` | Per-request timeout in milliseconds |
+| `RADARR__MOVETIMEOUTMS` | no | `120000` | Timeout in milliseconds for the `radarr_move_movies` request (no retries) |
 
 > **Note:** `__` (double underscore) is the .NET hierarchy separator. Property names are matched case-insensitively with no underscore substitution — `RADARR__APIKEY` maps to `ApiKey`, not `RADARR__API_KEY`.
 
@@ -193,6 +194,28 @@ Update monitored status or quality profile of a library movie.
 | `radarrId` | int | required | Radarr movie ID |
 | `monitored` | bool? | `null` | Set monitored state |
 | `qualityProfileId` | int? | `null` | Assign a different quality profile |
+
+Does not change the root folder or move files — use `radarr_move_movies`.
+
+---
+
+### `radarr_move_movies`
+Move one or more movies to a different root folder via Radarr's bulk movie editor (`PUT /api/v3/movie/editor`). With `moveFiles: true` Radarr physically moves the folders on disk in a background `BulkMoveMovie` job and may rename the movie folder according to its folder naming format. **Destructive — run with `dryRun: true` first.**
+
+Before sending anything, the tool checks that the root folder exists (trailing slash ignored) and that every ID is in the library; if either check fails, nothing is changed. Movies already in the target root folder are reported as `skipped`. The response lists `moved` (or `planned` in dry-run mode) with `id`, `title`, `oldPath`, `newRootFolder`, `newPath`, plus `skipped` and the `queuedCommands` Radarr started for the move (not awaited).
+
+**Example:** *"Move movies 12, 15 and 40 to /movies/T — show me the plan first"*
+
+```json
+{ "movieIds": [12, 15, 40], "rootFolderPath": "/movies/T", "moveFiles": true, "dryRun": true }
+```
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `movieIds` | int[] | required | Radarr movie IDs (1–100), from `radarr_get_library` |
+| `rootFolderPath` | string | required | Destination root folder, as listed by `radarr_get_root_folders` |
+| `moveFiles` | bool | `true` | `false` = only update the path in Radarr's DB, leave files in place |
+| `dryRun` | bool | `false` | Return the plan without changing anything |
 
 ---
 

@@ -16,4 +16,8 @@ public sealed class RadarrOptions
     /// <summary>Per-request timeout in milliseconds. Defaults to 15000.</summary>
     [Range(1000, 300_000)]
     public int TimeoutMs { get; set; } = 15_000;
+
+    /// <summary>Timeout in milliseconds for the bulk move (movie editor) request. Defaults to 120000.</summary>
+    [Range(1000, 1_800_000)]
+    public int MoveTimeoutMs { get; set; } = 120_000;
 }

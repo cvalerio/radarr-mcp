@@ -41,6 +41,9 @@ public interface IRadarrClient
     /// <summary>Deletes a movie from the library, optionally removing its files.</summary>
     Task<Result<bool>> DeleteMovieAsync(int radarrId, bool deleteFiles, bool addImportExclusion, CancellationToken ct = default);
 
+    /// <summary>Changes the root folder of several movies via PUT /api/v3/movie/editor, optionally moving files. Not retried.</summary>
+    Task<Result<List<RadarrMovie>>> MoveMoviesAsync(RadarrMovieEditorMoveRequest body, CancellationToken ct = default);
+
     // ── Queue ─────────────────────────────────────────────────────────────────
 
     /// <summary>Returns the current download queue.</summary>
@@ -69,6 +72,9 @@ public interface IRadarrClient
 
     /// <summary>Sends a command to Radarr via POST /api/v3/command.</summary>
     Task<Result<RadarrCommandResponse>> SendCommandAsync(string commandName, JsonElement? commandArgs = null, CancellationToken ct = default);
+
+    /// <summary>Returns queued, running and recently finished commands via GET /api/v3/command.</summary>
+    Task<Result<List<RadarrCommandStatus>>> GetCommandsAsync(CancellationToken ct = default);
 
     // ── Wanted / cutoff unmet ─────────────────────────────────────────────────
 

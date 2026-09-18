@@ -11,7 +11,7 @@ var builder = Host.CreateApplicationBuilder(args);
 // ── Configuration ──────────────────────────────────────────────────────────
 // Host.CreateApplicationBuilder already adds environment variables.
 // Bind from env vars using double-underscore hierarchy separator:
-//   RADARR__URL, RADARR__APIKEY, RADARR__TIMEOUTMS
+//   RADARR__URL, RADARR__APIKEY, RADARR__TIMEOUTMS, RADARR__MOVETIMEOUTMS
 
 builder.Services
     .AddOptions<RadarrOptions>()
@@ -48,6 +48,15 @@ builder.Services.AddHttpClient("RadarrSlow", (sp, client) =>
     client.BaseAddress = new Uri(opts.Url.TrimEnd('/'));
     client.DefaultRequestHeaders.Add("X-Api-Key", opts.ApiKey);
     client.Timeout = TimeSpan.FromMinutes(5);
+});
+
+// Move client for the bulk movie editor. No retry pipeline: re-sending a move is not safe.
+builder.Services.AddHttpClient("RadarrMove", (sp, client) =>
+{
+    var opts = sp.GetRequiredService<IOptions<RadarrOptions>>().Value;
+    client.BaseAddress = new Uri(opts.Url.TrimEnd('/'));
+    client.DefaultRequestHeaders.Add("X-Api-Key", opts.ApiKey);
+    client.Timeout = TimeSpan.FromMilliseconds(opts.MoveTimeoutMs);
 });
 
 // ── Background services ───────────────────────────────────────────────────

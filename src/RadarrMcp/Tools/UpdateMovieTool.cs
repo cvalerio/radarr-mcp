@@ -13,7 +13,7 @@ public sealed class UpdateMovieTool(IRadarrClient radarr)
     /// At least one of <paramref name="monitored"/> or <paramref name="qualityProfileId"/> must be provided.
     /// </summary>
     [McpServerTool(Name = "radarr_update_movie")]
-    [Description("Update monitored status or quality profile of a movie already in the library.")]
+    [Description("Update monitored status or quality profile of a movie already in the library. Does not change the root folder or move files — use radarr_move_movies for that.")]
     public async Task<string> UpdateMovieAsync(
         [Description("The Radarr-assigned numeric ID of the movie to update.")] int radarrId,
         [Description("Set to true to monitor, false to unmonitor. Omit to leave unchanged.")] bool? monitored = null,

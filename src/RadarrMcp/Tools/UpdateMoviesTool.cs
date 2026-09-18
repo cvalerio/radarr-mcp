@@ -16,7 +16,7 @@ public sealed class UpdateMoviesTool(IRadarrClient radarr)
     /// Updates monitored status or quality profile for multiple movies in parallel.
     /// </summary>
     [McpServerTool(Name = "radarr_update_movies")]
-    [Description("Update monitored status or quality profile for multiple movies in parallel. Use instead of calling radarr_update_movie repeatedly. Accepts a JSON array of update requests.")]
+    [Description("Update monitored status or quality profile for multiple movies in parallel. Use instead of calling radarr_update_movie repeatedly. Accepts a JSON array of update requests. Does not change the root folder or move files — use radarr_move_movies for that.")]
     public async Task<string> UpdateMoviesAsync(
         [Description("JSON array of update requests. Each element has: radarrId (int, required), monitored (bool, optional), qualityProfileId (int, optional). At least one of monitored or qualityProfileId must be set per entry.")] string updatesJson,
         CancellationToken cancellationToken = default)

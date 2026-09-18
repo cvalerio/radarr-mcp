@@ -202,6 +202,53 @@ public sealed record RadarrCommandResponse(
     [property: JsonPropertyName("trigger")] string? Trigger,
     [property: JsonPropertyName("message")] string? Message);
 
+/// <summary>Entry returned by GET /api/v3/command, including the raw command body.</summary>
+public sealed record RadarrCommandStatus(
+    [property: JsonPropertyName("id")] int Id,
+    [property: JsonPropertyName("name")] string? Name,
+    [property: JsonPropertyName("status")] string? Status,
+    [property: JsonPropertyName("queued")] DateTime? Queued,
+    [property: JsonPropertyName("body")] System.Text.Json.JsonElement? Body);
+
+// ── Movie editor (bulk move) ──────────────────────────────────────────────────
+
+/// <summary>Body for PUT /api/v3/movie/editor when changing root folder.</summary>
+public sealed record RadarrMovieEditorMoveRequest(
+    [property: JsonPropertyName("movieIds")] List<int> MovieIds,
+    [property: JsonPropertyName("rootFolderPath")] string RootFolderPath,
+    [property: JsonPropertyName("moveFiles")] bool MoveFiles);
+
+/// <summary>A movie that was (or, in dry-run mode, would be) moved by radarr_move_movies.</summary>
+public sealed record MoveMovieEntry(
+    [property: JsonPropertyName("id")] int Id,
+    [property: JsonPropertyName("title")] string Title,
+    [property: JsonPropertyName("oldPath")] string? OldPath,
+    [property: JsonPropertyName("newRootFolder")] string NewRootFolder,
+    [property: JsonPropertyName("newPath")] string? NewPath);
+
+/// <summary>A movie excluded from a radarr_move_movies call.</summary>
+public sealed record MoveMovieSkipped(
+    [property: JsonPropertyName("id")] int Id,
+    [property: JsonPropertyName("title")] string Title,
+    [property: JsonPropertyName("reason")] string Reason);
+
+/// <summary>A background command queued by Radarr as a consequence of a move.</summary>
+public sealed record MoveQueuedCommand(
+    [property: JsonPropertyName("id")] int Id,
+    [property: JsonPropertyName("name")] string? Name,
+    [property: JsonPropertyName("status")] string? Status);
+
+/// <summary>Result of radarr_move_movies. <c>Planned</c> is set in dry-run mode, <c>Moved</c> otherwise.</summary>
+public sealed record MoveMoviesResult(
+    [property: JsonPropertyName("dryRun")] bool DryRun,
+    [property: JsonPropertyName("rootFolderPath")] string RootFolderPath,
+    [property: JsonPropertyName("moveFiles")] bool MoveFiles,
+    [property: JsonPropertyName("planned")] List<MoveMovieEntry>? Planned,
+    [property: JsonPropertyName("moved")] List<MoveMovieEntry>? Moved,
+    [property: JsonPropertyName("skipped")] List<MoveMovieSkipped> Skipped,
+    [property: JsonPropertyName("queuedCommands")] List<MoveQueuedCommand>? QueuedCommands,
+    [property: JsonPropertyName("note")] string? Note);
+
 // ── Wanted / cutoff unmet ─────────────────────────────────────────────────────
 
 /// <summary>Paged response from GET /api/v3/wanted/cutoff.</summary>

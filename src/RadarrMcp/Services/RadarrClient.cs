@@ -78,6 +78,25 @@ public sealed class RadarrClient : IRadarrClient
     public Task<Result<bool>> DeleteMovieAsync(int radarrId, bool deleteFiles, bool addImportExclusion, CancellationToken ct = default)
         => DeleteAsync($"/api/v3/movie/{radarrId}?deleteFiles={deleteFiles}&addImportExclusion={addImportExclusion}", ct);
 
+    /// <summary>Changes the root folder of several movies via PUT /api/v3/movie/editor, optionally moving files. Not retried.</summary>
+    public async Task<Result<List<RadarrMovie>>> MoveMoviesAsync(RadarrMovieEditorMoveRequest body, CancellationToken ct = default)
+    {
+        const string path = "/api/v3/movie/editor";
+        try
+        {
+            using var moveClient = _httpClientFactory.CreateClient("RadarrMove");
+            var json = JsonSerializer.Serialize(body, DeserializeOptions);
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+            using var request = new HttpRequestMessage(HttpMethod.Put, path) { Content = content };
+            var response = await moveClient.SendAsync(request, ct).ConfigureAwait(false);
+            return await ParseResponseAsync<List<RadarrMovie>>(response, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            return HandleException<List<RadarrMovie>>(ex, path, _options.MoveTimeoutMs);
+        }
+    }
+
     // ── Queue ─────────────────────────────────────────────────────────────────
 
     /// <summary>Returns the current download queue.</summary>
@@ -175,6 +194,10 @@ public sealed class RadarrClient : IRadarrClient
             return HandleException<RadarrCommandResponse>(ex, path);
         }
     }
+
+    /// <summary>Returns queued, running and recently finished commands via GET /api/v3/command.</summary>
+    public Task<Result<List<RadarrCommandStatus>>> GetCommandsAsync(CancellationToken ct = default)
+        => GetAsync<List<RadarrCommandStatus>>("/api/v3/command", ct);
 
     // ── Wanted / cutoff unmet ─────────────────────────────────────────────────
 
@@ -290,12 +313,12 @@ public sealed class RadarrClient : IRadarrClient
             _ => $"Radarr API error {(int)statusCode}: {body}"
         };
 
-    private Result<T> HandleException<T>(Exception ex, string path)
+    private Result<T> HandleException<T>(Exception ex, string path, int? timeoutMs = null)
     {
         var message = ex switch
         {
             TaskCanceledException or TimeoutException =>
-                $"Request timed out after {_options.TimeoutMs}ms. Is Radarr reachable?",
+                $"Request timed out after {timeoutMs ?? _options.TimeoutMs}ms. Is Radarr reachable?",
             HttpRequestException =>
                 $"Cannot connect to Radarr at {_options.Url}. Check RADARR_URL.",
             _ => $"Unexpected error calling Radarr: {ex.Message}"
