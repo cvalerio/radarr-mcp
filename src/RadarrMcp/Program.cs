@@ -1,12 +1,19 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Http.Resilience;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Polly;
 using RadarrMcp.Options;
 using RadarrMcp.Services;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+// ── Logging ────────────────────────────────────────────────────────────────
+// stdout is reserved for the MCP stdio protocol: send every console log to stderr.
+// Set in code, not only in appsettings.json, because that file is resolved from the
+// current working directory and MCP clients may launch the server from anywhere.
+builder.Logging.AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Trace);
 
 // ── Configuration ──────────────────────────────────────────────────────────
 // Host.CreateApplicationBuilder already adds environment variables.
