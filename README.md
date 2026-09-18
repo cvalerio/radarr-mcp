@@ -137,6 +137,21 @@ Search for movies by title via Radarr (which queries TMDB). Returns both library
 
 ---
 
+### `radarr_multi_search_movie`
+Run several title searches in parallel in one call. Use it instead of calling `radarr_search_movie` repeatedly. Takes at most 50 searches; any beyond that are ignored. Each search returns its own `results` and `error`.
+
+**Example:** *"Search for Heat, Ronin and Collateral"*
+
+```json
+[{ "query": "Heat", "limit": 3 }, { "query": "Ronin" }, { "query": "Collateral" }]
+```
+
+| Parameter | Type | Description |
+|---|---|---|
+| `searchesJson` | string (JSON array) | Array of `{ query, limit? }` (`limit` defaults to 5, clamped to 1–20) |
+
+---
+
 ### `radarr_get_library`
 List movies in the Radarr library with optional status filtering and title search.
 
@@ -171,6 +186,17 @@ Get full details of a specific movie by its Radarr ID.
 
 ---
 
+### `radarr_multi_get_details`
+Get full details of several movies in parallel. Use it instead of calling `radarr_get_movie_details` repeatedly. Each ID returns either its `result` or an `error`.
+
+**Example:** *"Show details for movies 407, 1513 and 464"*
+
+| Parameter | Type | Description |
+|---|---|---|
+| `radarrIdsJson` | string (JSON array) | Radarr movie IDs, e.g. `[407, 1513, 464]` (max 100) |
+
+---
+
 ### `radarr_delete_movie`
 Remove a movie from the library. Optionally delete files from disk.
 
@@ -196,6 +222,21 @@ Update monitored status or quality profile of a library movie.
 | `qualityProfileId` | int? | `null` | Assign a different quality profile |
 
 Does not change the root folder or move files — use `radarr_move_movies`.
+
+---
+
+### `radarr_update_movies`
+Update monitored status or quality profile for several movies in parallel. Takes at most 50 entries; any beyond that are ignored. Each entry returns `success` and either the updated `movie` or an `error`. Does not change the root folder or move files — use `radarr_move_movies`.
+
+**Example:** *"Unmonitor movies 12 and 15, and set movie 40 to quality profile 4"*
+
+```json
+[{ "radarrId": 12, "monitored": false }, { "radarrId": 15, "monitored": false }, { "radarrId": 40, "qualityProfileId": 4 }]
+```
+
+| Parameter | Type | Description |
+|---|---|---|
+| `updatesJson` | string (JSON array) | Array of `{ radarrId, monitored?, qualityProfileId? }`; each entry needs at least one of the two optional fields |
 
 ---
 
@@ -227,6 +268,62 @@ Get the current download queue including active and pending items.
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `includeMovie` | bool | `true` | Include movie metadata in each queue record |
+
+---
+
+### `radarr_get_cutoff_unmet`
+List monitored movies that have a file but haven't reached their quality profile's cutoff yet (upgrade candidates). Returns `radarrId`, `title`, `year`, `qualityProfileId`, current `quality` and `resolution`.
+
+**Example:** *"Which movies could still be upgraded?"*
+
+No parameters.
+
+---
+
+### `radarr_get_root_folders`
+List the configured root folders with `id`, `path`, `freeSpace`, `accessible` and `unmappedFolderCount`.
+
+**Example:** *"Which root folders do I have and how much space is left?"*
+
+No parameters.
+
+---
+
+### `radarr_get_unmapped_folders`
+Scan a root folder and list the subfolders on disk that aren't linked to any movie in Radarr. This is the first step of a library import. On large folders the scan can take a few minutes (5-minute timeout).
+
+**Example:** *"Which folders in root folder 2 aren't in Radarr yet?"*
+
+| Parameter | Type | Description |
+|---|---|---|
+| `rootFolderId` | int | Root folder ID, from `radarr_get_root_folders` |
+
+---
+
+### `radarr_import_movies`
+Import unmapped folders into the library. For each folder, the tool looks up the best TMDB match for `folderName` and imports it with `path` set to `folderPath`, without triggering a search. If the match is already in Radarr, that entry fails with `conflict: true` and the existing movie's ID/title: delete the existing movie first, then retry (same as the Radarr UI).
+
+**Example:** *"Import the unmapped folder 'Heat (1995)' from /movies/H"*
+
+```json
+[{ "folderPath": "/movies/H/Heat (1995)", "folderName": "Heat (1995)", "qualityProfileId": 4, "monitored": true }]
+```
+
+| Parameter | Type | Description |
+|---|---|---|
+| `imports` | string (JSON array) | Array of `{ folderPath, folderName, qualityProfileId?, monitored? }` (`monitored` defaults to `true`) |
+
+---
+
+### `radarr_command`
+Send a command to Radarr (`POST /api/v3/command`) to trigger an action right away, e.g. `MoviesSearch`, `RefreshMovie`, `RescanMovie`, `RssSync`. Returns the queued command's `id`, `status` and timestamps without waiting for it to finish.
+
+**Example:** *"Search for new releases of movies 123 and 456"*
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `commandName` | string | required | Radarr command name, e.g. `MoviesSearch` |
+| `commandArgs` | string (JSON object) | `null` | Extra fields merged into the command body, e.g. `{"movieIds": [123, 456]}` |
 
 ---
 
